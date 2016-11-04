@@ -22,6 +22,8 @@ Install IPLookup using the following command:
 $ git clone https://github.com/rookford343/IPLookup.git
 ```
 
+In order to run the code you will need to get a Cymon.io API key and hard code it into the main program.
+
 #### Running Code
 For a help menu:
 ```
