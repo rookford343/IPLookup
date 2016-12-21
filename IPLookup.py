@@ -184,7 +184,7 @@ def analyzeIPs(ips, output):
             if 'RBL Check:' in line:
                 end = line.rfind("|")
                 start = line[:end].rfind(':')
-                blacklist_data = line[start+1:end]
+                blacklist_data = line[start+2:end]
                 break
         if not blacklist_data:
             blacklist_data = "No Data Available"
@@ -318,7 +318,7 @@ def analyzeIPs(ips, output):
             print '[*] Hostname:\t\t%s' % hostname
             print '[*] ISP:\t\t%s' % isp
             print '[*] Reputation Score:\t%s' % rep_score
-            print '[*] Blacklist Data:\t%s' % blacklist_score
+            print '[*] Blacklist Data:\t%s' % blacklist_data
             print '[*] Tor Node:\t\t%s' % tor
             print '[*] Tags:\t\t%s' % tags
             print '\n[+] Links:'
