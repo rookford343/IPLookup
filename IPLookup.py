@@ -26,7 +26,7 @@ except ImportError as e:
     exit(1)
 
 PROGRAM = 'IPLookup'
-VERSION = '1.0.1'
+VERSION = '1.1.2'
 AUTHOR = 'Daniel Ford'
 lat = []
 lng = []
@@ -77,7 +77,7 @@ def analyzeIPs(ips, output):
     if len(ips) > 1:
         csvfile = open(output, 'wb')
         writer = csv.writer(csvfile, delimiter=',', quotechar='\"')
-        writer.writerow(['IP', 'Risk Rating', 'Reputation Score', 'Times Blacklisted', 'Tor Node', 'Tags', 'Country', 'Region', 'City', 'Hostname', 'ISP', 'Latitude/Longitude', 'Reputation URL', 'Blacklist URL', 'Location URL'])
+        writer.writerow(['IP', 'Risk Rating', 'Reputation Score', 'Blacklist Data', 'Tor Node', 'Tags', 'Country', 'Region', 'City', 'Hostname', 'ISP', 'Latitude/Longitude', 'Reputation URL', 'Blacklist URL', 'Location URL'])
     if not output == "SingleIP":
         bar.start()
     for i in ips:
@@ -85,6 +85,16 @@ def analyzeIPs(ips, output):
         where = []
         loc_url = 'http://ipinfo.io/%s/' % i
         info = requests.get(loc_url)
+        if info.status_code == 404:
+            print "\n[!] %s is not a valid IP address!" % i
+            print "[*] Moving to next IP..."
+            count_not_analyzed += 1
+            bar.next()
+            continue
+        elif info.status_code == 429:
+            print "\n[!] You have been rate limited by ipinfo.io!"
+            print "[!] Exiting Progam..."
+            exit(1)
         ipinfo = info.json()
         try:
             country = ipinfo["country"]
@@ -142,12 +152,12 @@ def analyzeIPs(ips, output):
             except:
                 if first_time:
                     print "\n[!] Reputation Authority is down!"
-                    print "[*] Waiting 30 seconds and trying again..."
+                    print "[*] Waiting 60 seconds and trying again..."
                     first_time = False
                 else:
                     print "[!] Reputation Authority is still down!"
-                    print "[*] Waiting another 30 seconds and trying again..."
-            time.sleep(30)
+                    print "[*] Waiting another 60 seconds and trying again..."
+            time.sleep(60)
         rep = rep.text.split("\n")
         for line in rep:
             if 'Reputation Score' in line:
@@ -159,40 +169,47 @@ def analyzeIPs(ips, output):
                 break
 
         # Determine if it has been blacklisted
-        blacklist_score = ''
-        requests.get('http://www.ipvoid.com/update-report/%s/' % i)
-        blacklist_url = 'http://www.ipvoid.com/scan/%s/' % i
+        blacklist_data = ''
+        blacklist_url = 'http://www.ip-tracker.org/blacklist-check.php?ip=%s' % i
         while(True):
             try:
                 blacklist = requests.get(blacklist_url)
                 break
             except:
-                print "\n[!] Failed to reach IPVoid!"
+                print "\n[!] Failed to reach ip-tracker.org!"
                 print "[*] Waiting 10 seconds and trying again..."
             time.sleep(10)
         blacklist =  blacklist.text.split("\n")
         for line in blacklist:
-            if 'Report not found' in line:
-                blacklist_payload = {'ip':i}
-                session = requests.session()
-                tmp = requests.post('http://www.ipvoid.com/', data=blacklist_payload)
-                blacklist = requests.get(blacklist_url)
-                blacklist =  blacklist.text.split("\n")
-            if 'Blacklist Status' in line:
-                end = line.rfind('</span>')
-                start = line[:end].rfind('<span')
-                blacklist_score = line[start+1:end]
-                blacklist_score = blacklist_score[blacklist_score.find('>')+1:]
-                blacklist_score = blacklist_score.split()[-1]
-                blacklist_score = blacklist_score.split("/")[0]
+            if 'RBL Check:' in line:
+                end = line.rfind("|")
+                start = line[:end].rfind(':')
+                blacklist_data = line[start+1:end]
                 break
-        if not blacklist_score:
-            blacklist_score = "No Data Available"
+        if not blacklist_data:
+            blacklist_data = "No Data Available"
 
         # Associated tags from Cymon.io
         tags = []
         headers = {'Authorization':'Token %s' % Cymon_api_key}
         getTags = requests.get("https://cymon.io:443/api/nexus/v1/ip/%s/events/" % i, headers=headers)
+        temp = 0
+        while(True):
+            if not getTags and temp < 5:
+                print "\n[!] Failed to reach Cymon.io!"
+                print "[*] Waiting 5 seconds and trying again..."
+            else:
+                break
+            time.sleep(5)
+            getTags = requests.get("https://cymon.io:443/api/nexus/v1/ip/%s/events/" % i, headers=headers)
+            temp += 1
+        if not getTags and temp > 4:
+            print "\n[!] Failed to reach Cymon.io after 5 tries!"
+            print "[*] Moving to next IP..."
+            writer.writerow([i,'Insufficient Data',rep_score,blacklist_data,"","",country,region,city,hostname,isp,loc,rep_url,blacklist_url,loc_url])
+            bar.next()
+            temp = 0
+            continue
         dTags = getTags.json()
 
         if rate_limit:
@@ -227,39 +244,35 @@ def analyzeIPs(ips, output):
         rep_score_color = rep_score.split("/")[0]
         if rep_score_color:
             rep_score_color = int(rep_score_color)
-            try:
-                blacklist_score_color = int(blacklist_score)
-            except:
-                pass
-            if rep_score_color <= 50 and not blacklist_score_color == 0 and not tags == 'None':
+            if rep_score_color <= 50 and not blacklist_data == "Not Blacklisted" and not tags == 'None':
                 marker_color.append('orange')
                 risk_color = 'orange'
                 risk = 'Medium'
-            elif rep_score_color <= 50 and blacklist_score_color == 0 and not tags == 'None':
+            elif rep_score_color <= 50 and blacklist_data == "Not Blacklisted" and not tags == 'None':
                 marker_color.append('yellow')
                 risk_color = 'gold'
                 risk = 'Low'
-            elif rep_score_color <= 50 and not blacklist_score_color == 0 and tags == 'None':
+            elif rep_score_color <= 50 and not blacklist_data == "Not Blacklisted" and tags == 'None':
                 marker_color.append('yellow')
                 risk_color = 'gold'
                 risk = 'Low'
-            elif rep_score_color <= 50 and blacklist_score_color == 0 and tags == 'None':
+            elif rep_score_color <= 50 and blacklist_data == "Not Blacklisted" and tags == 'None':
                 marker_color.append('green')
                 risk_color = 'green'
                 risk = 'Minimal'
-            elif rep_score_color > 50 and rep_score_color <= 70 and not blacklist_score_color == 0 and not tags == 'None':
+            elif rep_score_color > 50 and rep_score_color <= 70 and not blacklist_data == "Not Blacklisted" and not tags == 'None':
                 marker_color.append('red')
                 risk_color = 'red'
                 risk = 'High'
-            elif rep_score_color > 50 and rep_score_color <= 70 and blacklist_score_color == 0 and not tags == 'None':
+            elif rep_score_color > 50 and rep_score_color <= 70 and blacklist_data == "Not Blacklisted" and not tags == 'None':
                 marker_color.append('orange')
                 risk_color = 'orange'
                 risk = 'Medium'
-            elif rep_score_color > 50 and rep_score_color <= 70 and not blacklist_score_color == 0 and tags == 'None':
+            elif rep_score_color > 50 and rep_score_color <= 70 and not blacklist_data == "Not Blacklisted" and tags == 'None':
                 marker_color.append('orange')
                 risk_color = 'orange'
                 risk = 'Medium'
-            elif rep_score_color > 50 and rep_score_color <= 70 and blacklist_score_color == 0 and tags == 'None':
+            elif rep_score_color > 50 and rep_score_color <= 70 and blacklist_data == "Not Blacklisted" and tags == 'None':
                 marker_color.append('yellow')
                 risk_color = 'gold'
                 risk = 'Low'
@@ -267,7 +280,7 @@ def analyzeIPs(ips, output):
                 marker_color.append('red')
                 risk_color = 'red'
                 risk = 'High'
-            elif rep_score_color > 70 and rep_score_color <= 90 and not blacklist_score_color == 0:
+            elif rep_score_color > 70 and rep_score_color <= 90 and not blacklist_data == "Not Blacklisted":
                 marker_color.append('red')
                 risk_color = 'red'
                 risk = 'High'
@@ -305,7 +318,7 @@ def analyzeIPs(ips, output):
             print '[*] Hostname:\t\t%s' % hostname
             print '[*] ISP:\t\t%s' % isp
             print '[*] Reputation Score:\t%s' % rep_score
-            print '[*] Times Blacklisted:\t%s' % blacklist_score
+            print '[*] Blacklist Data:\t%s' % blacklist_score
             print '[*] Tor Node:\t\t%s' % tor
             print '[*] Tags:\t\t%s' % tags
             print '\n[+] Links:'
@@ -342,7 +355,7 @@ def analyzeIPs(ips, output):
             # Create labels
             label.append("<h1>%s</h1><small>%s</small><hr><p>Risk Rating: <b style=color:%s>%s</b></p><p><a href='%s'>Reputation Score:</a> %s</p><p><a href='%s'>Times Blacklisted:</a> %s</p><p>Tor Node: %s</p><p>Tags: %s</p>" % (i,where,risk_color,risk,rep_url,rep_score,blacklist_url,blacklist_score,tor,tags))
 
-            writer.writerow([i,risk,rep_score,blacklist_score,tor,tags,country,region,city,hostname,isp,loc,rep_url,blacklist_url,loc_url])
+            writer.writerow([i,risk,rep_score,blacklist_data,tor,tags,country,region,city,hostname,isp,loc,rep_url,blacklist_url,loc_url])
             count_analyzed += 1
             bar.next()
     bar.finish()
@@ -389,7 +402,7 @@ if __name__ == '__main__':
             ips = GetIPs(args.i, ip_column)
             start_time = datetime.datetime.now()
             if len(ips) > 1000:
-                print "[!] Will not be able to run all IPs in a day! Rate limit issues..."
+                print "[!] Will not be able to run all %s IPs in a day! Rate limit issues..." % len(ips)
                 cont = raw_input('[?] Continue? (Y/n) ')
                 if cont.lower() in ['n', 'no']:
                     print 'Exiting program...'
