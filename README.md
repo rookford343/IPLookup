@@ -9,7 +9,7 @@ IPLookup uses a number of open source projects and tools to work properly:
 * [Progress](https://github.com/verigak/progress) - Gives a progress bar to show an ETA
 * [Gmplot](https://pypi.python.org/pypi/gmplot/1.0.5) - Allows for the data to be displayed on a Google Map
 * [Cymon.IO](https://www.cymon.io) - Open Source Threat Intel
-* [IPVoid](http://www.ipvoid.com/) - Database of blacklisted IP addresses
+* [IP Tracker](http://www.ip-tracker.org/blacklist-check.php) - Database of blacklisted IP addresses
 * [Project Tor Status](https://torstatus.blutmagie.de/tor_exit_query.php) - Database of known Tor nodes
 * [Reputation Authority](http://www.reputationauthority.org/) - Database of reputation of IPs based on past behaviors
 * [IPinfo.io](http://ipinfo.io/developers) - Location, hosting, ISP, and other types of IP address info
