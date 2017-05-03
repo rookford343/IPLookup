@@ -1,6 +1,6 @@
 # IPLookup
 
-IPLookup is a network security tool that allows a user to take a list of IP addresses from a Firewall, IDS, Logs, etc. and determine if their is a risk associated with letting that IP address into your network.
+IPLookup is a network security tool that allows a user to take a list of IP addresses from a Firewall, IDS, Logs, etc. and determine if there is a risk associated with letting that IP address into your network.
 
 ### Tech
 
