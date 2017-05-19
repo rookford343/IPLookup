@@ -353,7 +353,7 @@ def analyzeIPs(ips, output):
             lng.append(tmp_lng)
 
             # Create labels
-            label.append("<h1>%s</h1><small>%s</small><hr><p>Risk Rating: <b style=color:%s>%s</b></p><p><a href='%s'>Reputation Score:</a> %s</p><p><a href='%s'>Times Blacklisted:</a> %s</p><p>Tor Node: %s</p><p>Tags: %s</p>" % (i,where,risk_color,risk,rep_url,rep_score,blacklist_url,blacklist_score,tor,tags))
+            label.append("<h1>%s</h1><small>%s</small><hr><p>Risk Rating: <b style=color:%s>%s</b></p><p><a href='%s'>Reputation Score:</a> %s</p><p><a href='%s'>Times Blacklisted:</a> %s</p><p>Tor Node: %s</p><p>Tags: %s</p>" % (i,where,risk_color,risk,rep_url,rep_score,blacklist_url,blacklist_data,tor,tags))
 
             writer.writerow([i,risk,rep_score,blacklist_data,tor,tags,country,region,city,hostname,isp,loc,rep_url,blacklist_url,loc_url])
             count_analyzed += 1
