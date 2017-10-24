@@ -16,12 +16,12 @@ except ImportError as e:
     print '[!] Run `pip install netaddr` and rerun program'
     exit(1)
 try:
-    from Rook_lib.progress.bar import *
+    from progress.bar import *
 except ImportError as e:
     print '[!] Warning! You do not have a dependency installed for showing the progress bar.'
     exit(1)
 try:
-    from Rook_lib.gmplot import *
+    from gmplot import *
 except ImportError as e:
     print '[!] Warning! You do not have a dependency installed for gmplot.'
     exit(1)
