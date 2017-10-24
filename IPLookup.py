@@ -6,6 +6,7 @@ import requests
 import csv
 import time
 import random
+import json
 from argparse import ArgumentParser
 from iso_country_codes import COUNTRY_NAME
 try:
@@ -15,18 +16,18 @@ except ImportError as e:
     print '[!] Run `pip install netaddr` and rerun program'
     exit(1)
 try:
-    from progress.bar import *
+    from Rook_lib.progress.bar import *
 except ImportError as e:
     print '[!] Warning! You do not have a dependency installed for showing the progress bar.'
     exit(1)
 try:
-    from gmplot import *
+    from Rook_lib.gmplot import *
 except ImportError as e:
     print '[!] Warning! You do not have a dependency installed for gmplot.'
     exit(1)
 
 PROGRAM = 'IPLookup'
-VERSION = '1.1.2'
+VERSION = '1.2'
 AUTHOR = 'Daniel Ford'
 lat = []
 lng = []
@@ -77,7 +78,7 @@ def analyzeIPs(ips, output):
     if len(ips) > 1:
         csvfile = open(output, 'wb')
         writer = csv.writer(csvfile, delimiter=',', quotechar='\"')
-        writer.writerow(['IP', 'Risk Rating', 'Reputation Score', 'Blacklist Data', 'Tor Node', 'Tags', 'Country', 'Region', 'City', 'Hostname', 'ISP', 'Latitude/Longitude', 'Reputation URL', 'Blacklist URL', 'Location URL'])
+        writer.writerow(['IP', 'Risk Rating', 'Reputation Score', 'Blacklist Data', 'Alien Vault', 'Tags', 'Country', 'Region', 'City', 'Hostname', 'ISP', 'Latitude/Longitude', 'Blacklist URL', 'Reputation URL', 'Alien Vault URL', 'Location URL'])
     if not output == "SingleIP":
         bar.start()
     for i in ips:
@@ -102,6 +103,9 @@ def analyzeIPs(ips, output):
             where.append(country)
         except:
             print "\n[!] No info for %s! Could be a private IP!" % i
+            if output == "SingleIP":
+                print '[!] Ending program...'
+                exit(0)
             print "[*] Moving to next IP..."
             count_not_analyzed += 1
             bar.next()
@@ -126,7 +130,7 @@ def analyzeIPs(ips, output):
             hostname = ipinfo["hostname"]
             hostname = "".join([x for x in hostname if ord(x) < 128])
         except:
-            hostname = ""
+            hostname = "Not Found"
             hostname = "".join([x for x in hostname if ord(x) < 128])
         try:
             isp = ipinfo["org"]
@@ -167,6 +171,25 @@ def analyzeIPs(ips, output):
                 rep_score = rep_score[rep_score.find('>')+1:rep_score.rfind('<')]
                 rep_score = rep_score.strip()
                 break
+
+        # Determine if it is on Alien Vault
+        alien_data = ''
+        alien_url = 'https://www.alienvault.com/open-threat-exchange/dashboard#/my/reputation-monitor/%s' % i
+        alien_request_url = 'https://www.alienvault.com/apps/api/threat/ip/%s' % i
+        while(True):
+            try:
+                alien = requests.get(alien_request_url)
+                break
+            except:
+                print "\n[!] Failed to reach alienvault.com!"
+                print "[*] Waiting 10 seconds and trying again..."
+            time.sleep(10)
+        alien_data = alien.json()
+        if alien_data['activity_types']:
+            alien_data = alien_data['activity_types']
+            alien_data = str(alien_data).split('\'')[1]
+        else:
+            alien_data = "No Data Available"
 
         # Determine if it has been blacklisted
         blacklist_data = ''
@@ -244,7 +267,11 @@ def analyzeIPs(ips, output):
         rep_score_color = rep_score.split("/")[0]
         if rep_score_color:
             rep_score_color = int(rep_score_color)
-            if rep_score_color <= 50 and not blacklist_data == "Not Blacklisted" and not tags == 'None':
+            if rep_score_color <= 50 and alien_data == "No Data Available" and blacklist_data == "Not Blacklisted" and tags == 'None':
+                marker_color.append('green')
+                risk_color = 'green'
+                risk = 'Minimal'
+            elif rep_score_color <= 50 and not blacklist_data == "Not Blacklisted" and not tags == 'None':
                 marker_color.append('orange')
                 risk_color = 'orange'
                 risk = 'Medium'
@@ -256,10 +283,18 @@ def analyzeIPs(ips, output):
                 marker_color.append('yellow')
                 risk_color = 'gold'
                 risk = 'Low'
-            elif rep_score_color <= 50 and blacklist_data == "Not Blacklisted" and tags == 'None':
-                marker_color.append('green')
-                risk_color = 'green'
-                risk = 'Minimal'
+            elif rep_score_color <= 50 and not alien_data == "No Data Available" and not tags == 'None':
+                marker_color.append('orange')
+                risk_color = 'orange'
+                risk = 'Medium'
+            elif rep_score_color <= 50 and alien_data == "No Data Available" and not tags == 'None':
+                marker_color.append('yellow')
+                risk_color = 'gold'
+                risk = 'Low'
+            elif rep_score_color <= 50 and not alien_data == "No Data Available" and tags == 'None':
+                marker_color.append('yellow')
+                risk_color = 'gold'
+                risk = 'Low'
             elif rep_score_color > 50 and rep_score_color <= 70 and not blacklist_data == "Not Blacklisted" and not tags == 'None':
                 marker_color.append('red')
                 risk_color = 'red'
@@ -276,11 +311,35 @@ def analyzeIPs(ips, output):
                 marker_color.append('yellow')
                 risk_color = 'gold'
                 risk = 'Low'
+            elif rep_score_color > 50 and rep_score_color <= 70 and not alien_data == "No Data Available" and not tags == 'None':
+                marker_color.append('red')
+                risk_color = 'red'
+                risk = 'High'
+            elif rep_score_color > 50 and rep_score_color <= 70 and alien_data == "No Data Available" and not tags == 'None':
+                marker_color.append('orange')
+                risk_color = 'orange'
+                risk = 'Medium'
+            elif rep_score_color > 50 and rep_score_color <= 70 and not alien_data == "No Data Available" and tags == 'None':
+                marker_color.append('orange')
+                risk_color = 'orange'
+                risk = 'Medium'
+            elif rep_score_color > 50 and rep_score_color <= 70 and alien_data == "No Data Available" and tags == 'None':
+                marker_color.append('yellow')
+                risk_color = 'gold'
+                risk = 'Low'
+            elif rep_score_color <= 50 and not alien_data == "No Data Available" and not blacklist_data == "Not Blacklisted" and not tags == 'None':
+                marker_color.append('red')
+                risk_color = 'red'
+                risk = 'High'
             elif rep_score_color > 70 and rep_score_color <= 90 and not tags == 'None':
                 marker_color.append('red')
                 risk_color = 'red'
                 risk = 'High'
             elif rep_score_color > 70 and rep_score_color <= 90 and not blacklist_data == "Not Blacklisted":
+                marker_color.append('red')
+                risk_color = 'red'
+                risk = 'High'
+            elif rep_score_color > 70 and rep_score_color <= 90 and not alien_data == "No Data Available":
                 marker_color.append('red')
                 risk_color = 'red'
                 risk = 'High'
@@ -299,16 +358,16 @@ def analyzeIPs(ips, output):
             rep_score = 'No Data Available'
 
         # Find if IP is a Tor Node
-        tor_url = 'https://torstatus.blutmagie.de/tor_exit_query.php'
-        tor_payload = {'QueryIP':i}
-        session = requests.session()
-        tor_request = requests.post(tor_url, data=tor_payload)
-        if "The IP Address you entered matches" in tor_request.text:
-            tor = "Yes"
-        elif "The IP Address you entered is NOT" in tor_request.text:
-            tor = "No"
-        else:
-            print "[!] Error! Response not found, check code!"
+        # tor_url = 'https://torstatus.blutmagie.de/tor_exit_query.php'
+        # tor_payload = {'QueryIP':i}
+        # session = requests.session()
+        # tor_request = requests.post(tor_url, data=tor_payload)
+        # if "The IP Address you entered matches" in tor_request.text:
+        #     tor = "Yes"
+        # elif "The IP Address you entered is NOT" in tor_request.text:
+        #     tor = "No"
+        # else:
+        #     print "[!] Error! Response not found, check code!"
 
         if output == "SingleIP":
             # Print out results
@@ -319,12 +378,13 @@ def analyzeIPs(ips, output):
             print '[*] ISP:\t\t%s' % isp
             print '[*] Reputation Score:\t%s' % rep_score
             print '[*] Blacklist Data:\t%s' % blacklist_data
-            print '[*] Tor Node:\t\t%s' % tor
+            print '[*] Alien Vault:\t%s' % alien_data
             print '[*] Tags:\t\t%s' % tags
             print '\n[+] Links:'
             print '[*] IP Info URL:\t%s' % loc_url
             print '[*] Blacklist URL:\t%s' % blacklist_url
             print '[*] Reputation URL:\t%s' % rep_url
+            print '[*] Alien Vault URL:\t%s' % alien_url
             exit(0)
         else:
             # Move marker so they don't stack
@@ -353,9 +413,9 @@ def analyzeIPs(ips, output):
             lng.append(tmp_lng)
 
             # Create labels
-            label.append("<h1>%s</h1><small>%s</small><hr><p>Risk Rating: <b style=color:%s>%s</b></p><p><a href='%s'>Reputation Score:</a> %s</p><p><a href='%s'>Times Blacklisted:</a> %s</p><p>Tor Node: %s</p><p>Tags: %s</p>" % (i,where,risk_color,risk,rep_url,rep_score,blacklist_url,blacklist_data,tor,tags))
+            label.append("<h1>%s</h1><small>%s</small><hr><p>Risk Rating: <b style=color:%s>%s</b></p><p><a href='%s'>Reputation Score:</a> %s</p><p><a href='%s'>Times Blacklisted:</a> %s</p><p><a href='%s'>Alien Vault:</a> %s</p><p>Tags: %s</p>" % (i,where,risk_color,risk,rep_url,rep_score,blacklist_url,blacklist_data,alien_url,alien_data,tags))
 
-            writer.writerow([i,risk,rep_score,blacklist_data,tor,tags,country,region,city,hostname,isp,loc,rep_url,blacklist_url,loc_url])
+            writer.writerow([i,risk,rep_score,blacklist_data,alien_data,tags,country,region,city,hostname,isp,loc,rep_url,blacklist_url,alien_url,loc_url])
             count_analyzed += 1
             bar.next()
     bar.finish()
