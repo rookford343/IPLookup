@@ -7,8 +7,15 @@ import csv
 import time
 import random
 import json
+import socket
+from urllib2 import urlopen
 from argparse import ArgumentParser
 from iso_country_codes import COUNTRY_NAME
+try:
+    import dns.resolver
+except ImportError as e:
+    print '[!] Warning! You do not have a dependency installed for dns.resolver'
+    print '[!] Run `pip install dnspython` and rerun program'
 try:
     from netaddr import *
 except ImportError as e:
@@ -27,7 +34,7 @@ except ImportError as e:
     exit(1)
 
 PROGRAM = 'IPLookup'
-VERSION = '1.2'
+VERSION = '1.3'
 AUTHOR = 'Daniel Ford'
 lat = []
 lng = []
@@ -78,7 +85,7 @@ def analyzeIPs(ips, output):
     if len(ips) > 1:
         csvfile = open(output, 'wb')
         writer = csv.writer(csvfile, delimiter=',', quotechar='\"')
-        writer.writerow(['IP', 'Risk Rating', 'Reputation Score', 'Blacklist Data', 'Alien Vault', 'Tags', 'Country', 'Region', 'City', 'Hostname', 'ISP', 'Latitude/Longitude', 'Blacklist URL', 'Reputation URL', 'Alien Vault URL', 'Location URL'])
+        writer.writerow(['IP', 'Risk Rating', 'Reputation Score', 'Blacklist Status', 'Alien Vault', 'Tags', 'Country', 'Region', 'City', 'Hostname', 'ISP', 'Latitude/Longitude', 'Reputation URL', 'Alien Vault URL', 'Location URL'])
     if not output == "SingleIP":
         bar.start()
     for i in ips:
@@ -136,7 +143,7 @@ def analyzeIPs(ips, output):
             isp = ipinfo["org"]
             isp = "".join([x for x in isp if ord(x) < 128])
         except:
-            isp = ""
+            isp = "Not Found"
             isp = "".join([x for x in isp if ord(x) < 128])
         try:
             loc = ipinfo["loc"]
@@ -191,26 +198,57 @@ def analyzeIPs(ips, output):
         else:
             alien_data = "No Data Available"
 
-        # Determine if it has been blacklisted
-        blacklist_data = ''
-        blacklist_url = 'http://www.ip-tracker.org/blacklist-check.php?ip=%s' % i
-        while(True):
+        # Determine how many times it has been blacklisted
+        bls = ["0spam.fusionzero.com", "access.redhawk.org", "all.rbl.jp",
+                "all.s5h.net", "all.spamrats.com", "aspews.ext.sorbs.net",
+                "b.barracudacentral.org", "bb.barracudacentral.org", "bl.spamcop.net",
+                "blacklist.woody.ch", "block.dnsbl.sorbs.net", "cbl.abuseat.org",
+                "cbl.anti-spam.org.cn", "cblless.anti-spam.org.cn", "cblplus.anti-spam.org.cn",
+                "cdl.anti-spam.org.cn", "combined.abuse.ch", "db.wpbl.info",
+                "dnsbl-0.uceprotect.net", "dnsbl-1.uceprotect.net", "dnsbl-2.uceprotect.net",
+                "dnsbl-3.uceprotect.net", "dnsbl.inps.de", "dnsbl.kempt.net",
+                "dnsbl.justspam.org", "dnsbl.sorbs.net", "dnsbl.spfbl.net",
+                "dnsrbl.swinog.ch", "drone.abuse.ch", "dul.dnsbl.sorbs.net",
+                "dul.ru", "dyna.spamrats.com", "escalations.dnsbl.sorbs.net",
+                "http.dnsbl.sorbs.net", "httpbl.abuse.ch", "ips.backscatterer.org",
+                "korea.services.net", "l1.bbfh.ext.sorbs.net", "l2.bbfh.ext.sorbs.net",
+                "l3.bbfh.ext.sorbs.net", "l4.bbfh.ext.sorbs.net", "list.bbfh.org",
+                "mail-abuse.blacklist.jippg.org", "misc.dnsbl.sorbs.net", "new.spam.dnsbl.sorbs.net",
+                "noptr.spamrats.com", "old.spam.dnsbl.sorbs.net", "orvedb.aupads.org",
+                "pbl.spamhaus.org", "problems.dnsbl.sorbs.net", "proxies.dnsbl.sorbs.net",
+                "psbl.surriel.com", "rbl.efnet.org", "rbl.efnetrbl.org",
+                "rbl.interserver.net", "recent.spam.dnsbl.sorbs.net", "relays.bl.kundenserver.de",
+                "relays.dnsbl.sorbs.net", "rsbl.aupads.org", "safe.dnsbl.sorbs.net",
+                "sbl-xbl.spamhaus.org", "sbl.spamhaus.org", "short.rbl.jp",
+                "smtp.dnsbl.sorbs.net", "socks.dnsbl.sorbs.net", "spam.abuse.ch",
+                "spam.dnsbl.sorbs.net", "spam.spamrats.com", "spamrbl.imp.ch",
+                "spamsources.fabel.dk", "tor.dan.me.uk", "tor.dnsbl.sectoor.de",
+                "tor.efnet.org", "torexit.dan.me.uk", "torserver.tor.dnsbl.sectoor.de",
+                "virus.rbl.jp", "web.dnsbl.sorbs.net", "wormrbl.imp.ch",
+                "xbl.spamhaus.org", "zen.spamhaus.org"]
+        blacklist_count = 0
+        for bl in bls:
             try:
-                blacklist = requests.get(blacklist_url)
-                break
-            except:
-                print "\n[!] Failed to reach ip-tracker.org!"
-                print "[*] Waiting 10 seconds and trying again..."
-            time.sleep(10)
-        blacklist =  blacklist.text.split("\n")
-        for line in blacklist:
-            if 'RBL Check:' in line:
-                end = line.rfind("|")
-                start = line[:end].rfind(':')
-                blacklist_data = line[start+2:end]
-                break
-        if not blacklist_data:
-            blacklist_data = "No Data Available"
+                my_resolver = dns.resolver.Resolver()
+                query = '.'.join(reversed(str(i).split("."))) + "." + bl
+                my_resolver.timeout = 5
+                my_resolver.lifetime = 5
+                answers = my_resolver.query(query, "A")
+                answer_txt = my_resolver.query(query, "TXT")
+                blacklist_count = blacklist_count + 1
+            except dns.resolver.NXDOMAIN:
+                pass
+            except dns.resolver.Timeout:
+                pass
+            except dns.resolver.NoNameservers:
+                pass
+            except dns.resolver.NoAnswer:
+                pass
+
+        if blacklist_count == 0:
+            blacklist_data = "Not Blacklisted"
+        else:
+            blacklist_data = "Blacklisted (%s/80)" % blacklist_count
 
         # Associated tags from Cymon.io
         tags = []
@@ -229,7 +267,7 @@ def analyzeIPs(ips, output):
         if not getTags and temp > 4:
             print "\n[!] Failed to reach Cymon.io after 5 tries!"
             print "[*] Moving to next IP..."
-            writer.writerow([i,'Insufficient Data',rep_score,blacklist_data,"","",country,region,city,hostname,isp,loc,rep_url,blacklist_url,loc_url])
+            writer.writerow([i,'Insufficient Data',rep_score,blacklist_count,alien_data,"",country,region,city,hostname,isp,loc,rep_url,alien_url,loc_url])
             bar.next()
             temp = 0
             continue
@@ -267,19 +305,19 @@ def analyzeIPs(ips, output):
         rep_score_color = rep_score.split("/")[0]
         if rep_score_color:
             rep_score_color = int(rep_score_color)
-            if rep_score_color <= 50 and alien_data == "No Data Available" and blacklist_data == "Not Blacklisted" and tags == 'None':
+            if rep_score_color <= 50 and alien_data == "No Data Available" and blacklist_count == 0 and tags == 'None':
                 marker_color.append('green')
                 risk_color = 'green'
                 risk = 'Minimal'
-            elif rep_score_color <= 50 and not blacklist_data == "Not Blacklisted" and not tags == 'None':
+            elif rep_score_color <= 50 and blacklist_count >= 1 and not tags == 'None':
                 marker_color.append('orange')
                 risk_color = 'orange'
                 risk = 'Medium'
-            elif rep_score_color <= 50 and blacklist_data == "Not Blacklisted" and not tags == 'None':
+            elif rep_score_color <= 50 and blacklist_count == 0 and not tags == 'None':
                 marker_color.append('yellow')
                 risk_color = 'gold'
                 risk = 'Low'
-            elif rep_score_color <= 50 and not blacklist_data == "Not Blacklisted" and tags == 'None':
+            elif rep_score_color <= 50 and blacklist_count >= 1 and tags == 'None':
                 marker_color.append('yellow')
                 risk_color = 'gold'
                 risk = 'Low'
@@ -295,19 +333,19 @@ def analyzeIPs(ips, output):
                 marker_color.append('yellow')
                 risk_color = 'gold'
                 risk = 'Low'
-            elif rep_score_color > 50 and rep_score_color <= 70 and not blacklist_data == "Not Blacklisted" and not tags == 'None':
+            elif rep_score_color > 50 and rep_score_color <= 70 and blacklist_count >= 1 and not tags == 'None':
                 marker_color.append('red')
                 risk_color = 'red'
                 risk = 'High'
-            elif rep_score_color > 50 and rep_score_color <= 70 and blacklist_data == "Not Blacklisted" and not tags == 'None':
+            elif rep_score_color > 50 and rep_score_color <= 70 and blacklist_count == 0 and not tags == 'None':
                 marker_color.append('orange')
                 risk_color = 'orange'
                 risk = 'Medium'
-            elif rep_score_color > 50 and rep_score_color <= 70 and not blacklist_data == "Not Blacklisted" and tags == 'None':
+            elif rep_score_color > 50 and rep_score_color <= 70 and blacklist_count >= 1 and tags == 'None':
                 marker_color.append('orange')
                 risk_color = 'orange'
                 risk = 'Medium'
-            elif rep_score_color > 50 and rep_score_color <= 70 and blacklist_data == "Not Blacklisted" and tags == 'None':
+            elif rep_score_color > 50 and rep_score_color <= 70 and blacklist_count == 0 and tags == 'None':
                 marker_color.append('yellow')
                 risk_color = 'gold'
                 risk = 'Low'
@@ -327,7 +365,7 @@ def analyzeIPs(ips, output):
                 marker_color.append('yellow')
                 risk_color = 'gold'
                 risk = 'Low'
-            elif rep_score_color <= 50 and not alien_data == "No Data Available" and not blacklist_data == "Not Blacklisted" and not tags == 'None':
+            elif rep_score_color <= 50 and not alien_data == "No Data Available" and blacklist_count >= 1 and not tags == 'None':
                 marker_color.append('red')
                 risk_color = 'red'
                 risk = 'High'
@@ -335,7 +373,7 @@ def analyzeIPs(ips, output):
                 marker_color.append('red')
                 risk_color = 'red'
                 risk = 'High'
-            elif rep_score_color > 70 and rep_score_color <= 90 and not blacklist_data == "Not Blacklisted":
+            elif rep_score_color > 70 and rep_score_color <= 90 and blacklist_count >= 1:
                 marker_color.append('red')
                 risk_color = 'red'
                 risk = 'High'
@@ -377,12 +415,11 @@ def analyzeIPs(ips, output):
             print '[*] Hostname:\t\t%s' % hostname
             print '[*] ISP:\t\t%s' % isp
             print '[*] Reputation Score:\t%s' % rep_score
-            print '[*] Blacklist Data:\t%s' % blacklist_data
+            print '[*] Blacklist Status:\t%s' % blacklist_data
             print '[*] Alien Vault:\t%s' % alien_data
             print '[*] Tags:\t\t%s' % tags
             print '\n[+] Links:'
             print '[*] IP Info URL:\t%s' % loc_url
-            print '[*] Blacklist URL:\t%s' % blacklist_url
             print '[*] Reputation URL:\t%s' % rep_url
             print '[*] Alien Vault URL:\t%s' % alien_url
             exit(0)
@@ -413,9 +450,9 @@ def analyzeIPs(ips, output):
             lng.append(tmp_lng)
 
             # Create labels
-            label.append("<h1>%s</h1><small>%s</small><hr><p>Risk Rating: <b style=color:%s>%s</b></p><p><a href='%s'>Reputation Score:</a> %s</p><p><a href='%s'>Times Blacklisted:</a> %s</p><p><a href='%s'>Alien Vault:</a> %s</p><p>Tags: %s</p>" % (i,where,risk_color,risk,rep_url,rep_score,blacklist_url,blacklist_data,alien_url,alien_data,tags))
+            label.append("<h1>%s</h1><small>%s</small><hr><p>Risk Rating: <b style=color:%s>%s</b></p><p><a href='%s'>Reputation Score:</a> %s</p><p>Times Blacklisted:</a> %s</p><p><a href='%s'>Alien Vault:</a> %s</p><p>Tags: %s</p>" % (i,where,risk_color,risk,rep_url,rep_score,blacklist_count,alien_url,alien_data,tags))
 
-            writer.writerow([i,risk,rep_score,blacklist_data,alien_data,tags,country,region,city,hostname,isp,loc,rep_url,blacklist_url,alien_url,loc_url])
+            writer.writerow([i,risk,rep_score,blacklist_data,alien_data,tags,country,region,city,hostname,isp,loc,rep_url,alien_url,loc_url])
             count_analyzed += 1
             bar.next()
     bar.finish()
