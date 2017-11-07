@@ -34,7 +34,7 @@ except ImportError as e:
     exit(1)
 
 PROGRAM = 'IPLookup'
-VERSION = '1.3'
+VERSION = '1.4'
 AUTHOR = 'Daniel Ford'
 lat = []
 lng = []
@@ -151,7 +151,13 @@ def analyzeIPs(ips, output):
             loc = ""
         where = ", ".join([x for x in where if x])
 
+        end_time_test = datetime.datetime.now()
+        time_test = end_time_test - start_time_test
+        print str(time_test)[:-5]
+
         # Get reputation score
+
+
         rep_score = ''
         score_line = False
         first_time = True
@@ -199,33 +205,26 @@ def analyzeIPs(ips, output):
             alien_data = "No Data Available"
 
         # Determine how many times it has been blacklisted
-        bls = ["0spam.fusionzero.com", "access.redhawk.org", "all.rbl.jp",
-                "all.s5h.net", "all.spamrats.com", "aspews.ext.sorbs.net",
-                "b.barracudacentral.org", "bb.barracudacentral.org", "bl.spamcop.net",
-                "blacklist.woody.ch", "block.dnsbl.sorbs.net", "cbl.abuseat.org",
-                "cbl.anti-spam.org.cn", "cblless.anti-spam.org.cn", "cblplus.anti-spam.org.cn",
-                "cdl.anti-spam.org.cn", "combined.abuse.ch", "db.wpbl.info",
-                "dnsbl-0.uceprotect.net", "dnsbl-1.uceprotect.net", "dnsbl-2.uceprotect.net",
-                "dnsbl-3.uceprotect.net", "dnsbl.inps.de", "dnsbl.kempt.net",
-                "dnsbl.justspam.org", "dnsbl.sorbs.net", "dnsbl.spfbl.net",
-                "dnsrbl.swinog.ch", "drone.abuse.ch", "dul.dnsbl.sorbs.net",
-                "dul.ru", "dyna.spamrats.com", "escalations.dnsbl.sorbs.net",
-                "http.dnsbl.sorbs.net", "httpbl.abuse.ch", "ips.backscatterer.org",
-                "korea.services.net", "l1.bbfh.ext.sorbs.net", "l2.bbfh.ext.sorbs.net",
-                "l3.bbfh.ext.sorbs.net", "l4.bbfh.ext.sorbs.net", "list.bbfh.org",
-                "mail-abuse.blacklist.jippg.org", "misc.dnsbl.sorbs.net", "new.spam.dnsbl.sorbs.net",
-                "noptr.spamrats.com", "old.spam.dnsbl.sorbs.net", "orvedb.aupads.org",
-                "pbl.spamhaus.org", "problems.dnsbl.sorbs.net", "proxies.dnsbl.sorbs.net",
-                "psbl.surriel.com", "rbl.efnet.org", "rbl.efnetrbl.org",
-                "rbl.interserver.net", "recent.spam.dnsbl.sorbs.net", "relays.bl.kundenserver.de",
-                "relays.dnsbl.sorbs.net", "rsbl.aupads.org", "safe.dnsbl.sorbs.net",
-                "sbl-xbl.spamhaus.org", "sbl.spamhaus.org", "short.rbl.jp",
-                "smtp.dnsbl.sorbs.net", "socks.dnsbl.sorbs.net", "spam.abuse.ch",
-                "spam.dnsbl.sorbs.net", "spam.spamrats.com", "spamrbl.imp.ch",
-                "spamsources.fabel.dk", "tor.dan.me.uk", "tor.dnsbl.sectoor.de",
-                "tor.efnet.org", "torexit.dan.me.uk", "torserver.tor.dnsbl.sectoor.de",
-                "virus.rbl.jp", "web.dnsbl.sorbs.net", "wormrbl.imp.ch",
-                "xbl.spamhaus.org", "zen.spamhaus.org"]
+        bls = ["0spam.fusionzero.com"," access.redhawk.org"," all.rbl.jp",
+                "all.s5h.net"," all.spamrats.com"," b.barracudacentral.org",
+                "bb.barracudacentral.org"," bl.spamcop.net"," blacklist.woody.ch",
+                "block.dnsbl.sorbs.net"," cbl.abuseat.org"," cblplus.anti-spam.org.cn",
+                "cdl.anti-spam.org.cn"," combined.abuse.ch"," db.wpbl.info",
+                "dnsbl-0.uceprotect.net"," dnsbl-1.uceprotect.net"," dnsbl-2.uceprotect.net",
+                "dnsbl-3.uceprotect.net"," dnsbl.inps.de"," dnsbl.kempt.net",
+                "dnsbl.justspam.org"," dnsbl.sorbs.net"," dnsbl.spfbl.net",
+                "drone.abuse.ch"," dul.dnsbl.sorbs.net"," dul.ru",
+                "dyna.spamrats.com"," escalations.dnsbl.sorbs.net"," http.dnsbl.sorbs.net",
+                "httpbl.abuse.ch"," ips.backscatterer.org"," korea.services.net",
+                "misc.dnsbl.sorbs.net"," new.spam.dnsbl.sorbs.net"," noptr.spamrats.com",
+                "old.spam.dnsbl.sorbs.net"," pbl.spamhaus.org"," problems.dnsbl.sorbs.net",
+                "proxies.dnsbl.sorbs.net"," psbl.surriel.com"," rbl.efnet.org",
+                "rbl.efnetrbl.org"," rbl.interserver.net"," recent.spam.dnsbl.sorbs.net",
+                "relays.bl.kundenserver.de"," relays.dnsbl.sorbs.net"," safe.dnsbl.sorbs.net",
+                "sbl-xbl.spamhaus.org"," sbl.spamhaus.org"," short.rbl.jp",
+                "smtp.dnsbl.sorbs.net"," socks.dnsbl.sorbs.net"," spam.abuse.ch",
+                "spam.dnsbl.sorbs.net"," spam.spamrats.com"," spamsources.fabel.dk",
+                "web.dnsbl.sorbs.net"," xbl.spamhaus.org"," zen.spamhaus.org"]
         blacklist_count = 0
         for bl in bls:
             try:
@@ -248,7 +247,7 @@ def analyzeIPs(ips, output):
         if blacklist_count == 0:
             blacklist_data = "Not Blacklisted"
         else:
-            blacklist_data = "Blacklisted (%s/80)" % blacklist_count
+            blacklist_data = "Blacklisted (%s/60)" % blacklist_count
 
         # Associated tags from Cymon.io
         tags = []
@@ -305,19 +304,19 @@ def analyzeIPs(ips, output):
         rep_score_color = rep_score.split("/")[0]
         if rep_score_color:
             rep_score_color = int(rep_score_color)
-            if rep_score_color <= 50 and alien_data == "No Data Available" and blacklist_count == 0 and tags == 'None':
+            if rep_score_color <= 50 and alien_data == "No Data Available" and blacklist_data == "Not Blacklisted" and tags == 'None':
                 marker_color.append('green')
                 risk_color = 'green'
                 risk = 'Minimal'
-            elif rep_score_color <= 50 and blacklist_count >= 1 and not tags == 'None':
+            elif rep_score_color <= 50 and not blacklist_data == "Not Blacklisted" and not tags == 'None':
                 marker_color.append('orange')
                 risk_color = 'orange'
                 risk = 'Medium'
-            elif rep_score_color <= 50 and blacklist_count == 0 and not tags == 'None':
+            elif rep_score_color <= 50 and blacklist_data == "Not Blacklisted" and not tags == 'None':
                 marker_color.append('yellow')
                 risk_color = 'gold'
                 risk = 'Low'
-            elif rep_score_color <= 50 and blacklist_count >= 1 and tags == 'None':
+            elif rep_score_color <= 50 and not blacklist_data == "Not Blacklisted" and tags == 'None':
                 marker_color.append('yellow')
                 risk_color = 'gold'
                 risk = 'Low'
@@ -333,19 +332,19 @@ def analyzeIPs(ips, output):
                 marker_color.append('yellow')
                 risk_color = 'gold'
                 risk = 'Low'
-            elif rep_score_color > 50 and rep_score_color <= 70 and blacklist_count >= 1 and not tags == 'None':
+            elif rep_score_color > 50 and rep_score_color <= 70 and not blacklist_data == "Not Blacklisted" and not tags == 'None':
                 marker_color.append('red')
                 risk_color = 'red'
                 risk = 'High'
-            elif rep_score_color > 50 and rep_score_color <= 70 and blacklist_count == 0 and not tags == 'None':
+            elif rep_score_color > 50 and rep_score_color <= 70 and blacklist_data == "Not Blacklisted" and not tags == 'None':
                 marker_color.append('orange')
                 risk_color = 'orange'
                 risk = 'Medium'
-            elif rep_score_color > 50 and rep_score_color <= 70 and blacklist_count >= 1 and tags == 'None':
+            elif rep_score_color > 50 and rep_score_color <= 70 and not blacklist_data == "Not Blacklisted" and tags == 'None':
                 marker_color.append('orange')
                 risk_color = 'orange'
                 risk = 'Medium'
-            elif rep_score_color > 50 and rep_score_color <= 70 and blacklist_count == 0 and tags == 'None':
+            elif rep_score_color > 50 and rep_score_color <= 70 and blacklist_data == "Not Blacklisted" and tags == 'None':
                 marker_color.append('yellow')
                 risk_color = 'gold'
                 risk = 'Low'
@@ -365,7 +364,7 @@ def analyzeIPs(ips, output):
                 marker_color.append('yellow')
                 risk_color = 'gold'
                 risk = 'Low'
-            elif rep_score_color <= 50 and not alien_data == "No Data Available" and blacklist_count >= 1 and not tags == 'None':
+            elif rep_score_color <= 50 and not alien_data == "No Data Available" and not blacklist_data == "Not Blacklisted" and not tags == 'None':
                 marker_color.append('red')
                 risk_color = 'red'
                 risk = 'High'
@@ -373,7 +372,7 @@ def analyzeIPs(ips, output):
                 marker_color.append('red')
                 risk_color = 'red'
                 risk = 'High'
-            elif rep_score_color > 70 and rep_score_color <= 90 and blacklist_count >= 1:
+            elif rep_score_color > 70 and rep_score_color <= 90 and not blacklist_data == "Not Blacklisted":
                 marker_color.append('red')
                 risk_color = 'red'
                 risk = 'High'
