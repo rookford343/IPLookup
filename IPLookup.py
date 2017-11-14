@@ -3,6 +3,11 @@
 import os
 import datetime
 import requests
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+# This import needs to be used to supress SSL alerts on newer versions of request
+# import urllib3
+# urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import csv
 import time
 import random
@@ -34,7 +39,7 @@ except ImportError as e:
     exit(1)
 
 PROGRAM = 'IPLookup'
-VERSION = '1.4'
+VERSION = '1.5'
 AUTHOR = 'Daniel Ford'
 lat = []
 lng = []
@@ -44,6 +49,8 @@ rate_limit = False
 
 # Have to sign up for an account on Cymon.io to get API key
 Cymon_api_key = '' # Only get a 1000 requests per day
+# Rook's Grunt API key (This your API key located in Preforce >> Help >> Token)
+rook_api = ''
 
 def GetIPs(file, c):
     ips = []
@@ -68,7 +75,37 @@ def GetIPs(file, c):
                     print '[-] Error parsing the IP from the following line:\n\t%s' % line
     return ips
 
-def analyzeIPs(ips, output):
+def Client_IP_Check(ip):
+    url = "https://preforce.rook.net/api/is_client"
+
+    querystring = {"ip_address":ip}
+
+    headers = {
+        'authorization': "Token %s" % rook_api,
+        'cache-control': "no-cache"
+    }
+    response = requests.request("GET", url, headers=headers, verify=False, params=querystring)
+
+    ip_data = None
+    try:
+        ip_data = json.loads(response.text)
+    except Exception, e:
+        error = {
+            "e": str(e),
+            "url": url,
+            "response": str(response),
+            "response.text": str(response.text)
+        }
+        print error
+
+    if not ip_data['is_client'] == "False":
+        ip_data = ip_data['is_client']
+        ip_data = ip_data[ip_data.find(':')+2:ip_data.rfind('-')-1]
+        return ip_data
+    else:
+        return None
+
+def analyzeIPs(ips, output, client_check):
     count_analyzed = 0
     count_not_analyzed = 0
     global lat
@@ -81,17 +118,24 @@ def analyzeIPs(ips, output):
     if Bar and not output == 'SingleIP':
         bar = Bar('Analyzing', max=len(ips), suffix='%(index)d/%(max)d - Elapsed: %(elapsed_td)s - Remaining: %(eta_td)s')
     elif output == 'SingleIP':
+        if client_check == "Yes":
+            print '[*] Checking to see if client IP...'
+            customer = Client_IP_Check(ips[0])
+            if customer:
+                print '[!] IP address is %s\'s! DO NOT BLOCK!\n' % customer
+            else:
+                print '[*] IP address is not a client IP.\n'
         print '[*] Analyzing IP Address: %s' % ips[0]
     if len(ips) > 1:
         csvfile = open(output, 'wb')
         writer = csv.writer(csvfile, delimiter=',', quotechar='\"')
-        writer.writerow(['IP', 'Risk Rating', 'Reputation Score', 'Blacklist Status', 'Alien Vault', 'Tags', 'Country', 'Region', 'City', 'Hostname', 'ISP', 'Latitude/Longitude', 'Reputation URL', 'Alien Vault URL', 'Location URL'])
+        writer.writerow(['IP', 'Risk Rating', 'Reputation Score', 'Blacklist Status', 'Alien Vault', 'Cymon.io Tags', 'Country', 'Region', 'City', 'Hostname', 'ISP', 'Latitude/Longitude', 'Reputation URL', 'Alien Vault URL', 'Cymon.io URL', 'Location URL'])
     if not output == "SingleIP":
         bar.start()
     for i in ips:
         # Get Location Info
         where = []
-        loc_url = 'http://ipinfo.io/%s/' % i
+        loc_url = 'https://ipinfo.io/%s/' % i
         info = requests.get(loc_url)
         if info.status_code == 404:
             print "\n[!] %s is not a valid IP address!" % i
@@ -151,13 +195,7 @@ def analyzeIPs(ips, output):
             loc = ""
         where = ", ".join([x for x in where if x])
 
-        end_time_test = datetime.datetime.now()
-        time_test = end_time_test - start_time_test
-        print str(time_test)[:-5]
-
         # Get reputation score
-
-
         rep_score = ''
         score_line = False
         first_time = True
@@ -183,6 +221,8 @@ def analyzeIPs(ips, output):
                 rep_score = line
                 rep_score = rep_score[rep_score.find('>')+1:rep_score.rfind('<')]
                 rep_score = rep_score.strip()
+                if not rep_score.split("/")[0]:
+                    rep_score = 'No Data Available'
                 break
 
         # Determine if it is on Alien Vault
@@ -205,27 +245,28 @@ def analyzeIPs(ips, output):
             alien_data = "No Data Available"
 
         # Determine how many times it has been blacklisted
-        bls = ["0spam.fusionzero.com"," access.redhawk.org"," all.rbl.jp",
-                "all.s5h.net"," all.spamrats.com"," b.barracudacentral.org",
-                "bb.barracudacentral.org"," bl.spamcop.net"," blacklist.woody.ch",
-                "block.dnsbl.sorbs.net"," cbl.abuseat.org"," cblplus.anti-spam.org.cn",
-                "cdl.anti-spam.org.cn"," combined.abuse.ch"," db.wpbl.info",
-                "dnsbl-0.uceprotect.net"," dnsbl-1.uceprotect.net"," dnsbl-2.uceprotect.net",
-                "dnsbl-3.uceprotect.net"," dnsbl.inps.de"," dnsbl.kempt.net",
-                "dnsbl.justspam.org"," dnsbl.sorbs.net"," dnsbl.spfbl.net",
-                "drone.abuse.ch"," dul.dnsbl.sorbs.net"," dul.ru",
-                "dyna.spamrats.com"," escalations.dnsbl.sorbs.net"," http.dnsbl.sorbs.net",
-                "httpbl.abuse.ch"," ips.backscatterer.org"," korea.services.net",
-                "misc.dnsbl.sorbs.net"," new.spam.dnsbl.sorbs.net"," noptr.spamrats.com",
-                "old.spam.dnsbl.sorbs.net"," pbl.spamhaus.org"," problems.dnsbl.sorbs.net",
-                "proxies.dnsbl.sorbs.net"," psbl.surriel.com"," rbl.efnet.org",
-                "rbl.efnetrbl.org"," rbl.interserver.net"," recent.spam.dnsbl.sorbs.net",
-                "relays.bl.kundenserver.de"," relays.dnsbl.sorbs.net"," safe.dnsbl.sorbs.net",
-                "sbl-xbl.spamhaus.org"," sbl.spamhaus.org"," short.rbl.jp",
-                "smtp.dnsbl.sorbs.net"," socks.dnsbl.sorbs.net"," spam.abuse.ch",
-                "spam.dnsbl.sorbs.net"," spam.spamrats.com"," spamsources.fabel.dk",
-                "web.dnsbl.sorbs.net"," xbl.spamhaus.org"," zen.spamhaus.org"]
+        bls = ["0spam.fusionzero.com","access.redhawk.org","all.rbl.jp",
+                "all.s5h.net","all.spamrats.com","b.barracudacentral.org",
+                "bb.barracudacentral.org","bl.spamcop.net","blacklist.woody.ch",
+                "block.dnsbl.sorbs.net","cbl.abuseat.org","cblplus.anti-spam.org.cn",
+                "cdl.anti-spam.org.cn","combined.abuse.ch","db.wpbl.info",
+                "dnsbl-0.uceprotect.net","dnsbl-1.uceprotect.net","dnsbl-2.uceprotect.net",
+                "dnsbl-3.uceprotect.net","dnsbl.inps.de","dnsbl.kempt.net",
+                "dnsbl.justspam.org","dnsbl.sorbs.net","dnsbl.spfbl.net",
+                "drone.abuse.ch","dul.dnsbl.sorbs.net","dul.ru",
+                "dyna.spamrats.com","escalations.dnsbl.sorbs.net","http.dnsbl.sorbs.net",
+                "httpbl.abuse.ch","ips.backscatterer.org","korea.services.net",
+                "misc.dnsbl.sorbs.net","new.spam.dnsbl.sorbs.net","noptr.spamrats.com",
+                "old.spam.dnsbl.sorbs.net","pbl.spamhaus.org","problems.dnsbl.sorbs.net",
+                "proxies.dnsbl.sorbs.net","psbl.surriel.com","rbl.efnet.org",
+                "rbl.efnetrbl.org","rbl.interserver.net","recent.spam.dnsbl.sorbs.net",
+                "relays.bl.kundenserver.de","relays.dnsbl.sorbs.net","safe.dnsbl.sorbs.net",
+                "sbl-xbl.spamhaus.org","sbl.spamhaus.org","short.rbl.jp",
+                "smtp.dnsbl.sorbs.net","socks.dnsbl.sorbs.net","spam.abuse.ch",
+                "spam.dnsbl.sorbs.net","spam.spamrats.com","spamsources.fabel.dk",
+                "web.dnsbl.sorbs.net","xbl.spamhaus.org","zen.spamhaus.org"]
         blacklist_count = 0
+        blacklist_reported = []
         for bl in bls:
             try:
                 my_resolver = dns.resolver.Resolver()
@@ -235,6 +276,7 @@ def analyzeIPs(ips, output):
                 answers = my_resolver.query(query, "A")
                 answer_txt = my_resolver.query(query, "TXT")
                 blacklist_count = blacklist_count + 1
+                blacklist_reported.append(bl)
             except dns.resolver.NXDOMAIN:
                 pass
             except dns.resolver.Timeout:
@@ -246,8 +288,10 @@ def analyzeIPs(ips, output):
 
         if blacklist_count == 0:
             blacklist_data = "Not Blacklisted"
+            blacklist_reported = "Not on any blacklists"
         else:
             blacklist_data = "Blacklisted (%s/60)" % blacklist_count
+            blacklist_reported = ', '.join(blacklist_reported)
 
         # Associated tags from Cymon.io
         tags = []
@@ -266,7 +310,7 @@ def analyzeIPs(ips, output):
         if not getTags and temp > 4:
             print "\n[!] Failed to reach Cymon.io after 5 tries!"
             print "[*] Moving to next IP..."
-            writer.writerow([i,'Insufficient Data',rep_score,blacklist_count,alien_data,"",country,region,city,hostname,isp,loc,rep_url,alien_url,loc_url])
+            writer.writerow([i,'Insufficient Data',rep_score,blacklist_count,alien_data,"",country,region,city,hostname,isp,loc,rep_url,alien_url,tags_url,loc_url])
             bar.next()
             temp = 0
             continue
@@ -301,110 +345,39 @@ def analyzeIPs(ips, output):
         # Determine color of marker and risk (Minimal,Low,Medium,High) based on rep_score, if it has a tag, and if has been blacklisted
         risk = ''
         risk_color = ''
-        rep_score_color = rep_score.split("/")[0]
-        if rep_score_color:
-            rep_score_color = int(rep_score_color)
-            if rep_score_color <= 50 and alien_data == "No Data Available" and blacklist_data == "Not Blacklisted" and tags == 'None':
-                marker_color.append('green')
-                risk_color = 'green'
-                risk = 'Minimal'
-            elif rep_score_color <= 50 and not blacklist_data == "Not Blacklisted" and not tags == 'None':
-                marker_color.append('orange')
-                risk_color = 'orange'
-                risk = 'Medium'
-            elif rep_score_color <= 50 and blacklist_data == "Not Blacklisted" and not tags == 'None':
+        risk_score = 0
+        rep_score_temp = rep_score.split("/")[0]
+        rep_score_temp = int(rep_score_temp)
+        if rep_score_temp > 70:
+            risk_score += 1
+        if not alien_data == "No Data Available":
+            risk_score += 1
+        if blacklist_count > 1:
+            risk_score += 1
+        if not tags == 'None':
+            risk_score += 1
+        if risk_score > 0 and customer == None:
+            if risk_score == 1:
                 marker_color.append('yellow')
                 risk_color = 'gold'
                 risk = 'Low'
-            elif rep_score_color <= 50 and not blacklist_data == "Not Blacklisted" and tags == 'None':
-                marker_color.append('yellow')
-                risk_color = 'gold'
-                risk = 'Low'
-            elif rep_score_color <= 50 and not alien_data == "No Data Available" and not tags == 'None':
+            elif risk_score == 2:
                 marker_color.append('orange')
                 risk_color = 'orange'
                 risk = 'Medium'
-            elif rep_score_color <= 50 and alien_data == "No Data Available" and not tags == 'None':
-                marker_color.append('yellow')
-                risk_color = 'gold'
-                risk = 'Low'
-            elif rep_score_color <= 50 and not alien_data == "No Data Available" and tags == 'None':
-                marker_color.append('yellow')
-                risk_color = 'gold'
-                risk = 'Low'
-            elif rep_score_color > 50 and rep_score_color <= 70 and not blacklist_data == "Not Blacklisted" and not tags == 'None':
+            elif risk_score >= 3:
                 marker_color.append('red')
                 risk_color = 'red'
                 risk = 'High'
-            elif rep_score_color > 50 and rep_score_color <= 70 and blacklist_data == "Not Blacklisted" and not tags == 'None':
-                marker_color.append('orange')
-                risk_color = 'orange'
-                risk = 'Medium'
-            elif rep_score_color > 50 and rep_score_color <= 70 and not blacklist_data == "Not Blacklisted" and tags == 'None':
-                marker_color.append('orange')
-                risk_color = 'orange'
-                risk = 'Medium'
-            elif rep_score_color > 50 and rep_score_color <= 70 and blacklist_data == "Not Blacklisted" and tags == 'None':
-                marker_color.append('yellow')
-                risk_color = 'gold'
-                risk = 'Low'
-            elif rep_score_color > 50 and rep_score_color <= 70 and not alien_data == "No Data Available" and not tags == 'None':
-                marker_color.append('red')
-                risk_color = 'red'
-                risk = 'High'
-            elif rep_score_color > 50 and rep_score_color <= 70 and alien_data == "No Data Available" and not tags == 'None':
-                marker_color.append('orange')
-                risk_color = 'orange'
-                risk = 'Medium'
-            elif rep_score_color > 50 and rep_score_color <= 70 and not alien_data == "No Data Available" and tags == 'None':
-                marker_color.append('orange')
-                risk_color = 'orange'
-                risk = 'Medium'
-            elif rep_score_color > 50 and rep_score_color <= 70 and alien_data == "No Data Available" and tags == 'None':
-                marker_color.append('yellow')
-                risk_color = 'gold'
-                risk = 'Low'
-            elif rep_score_color <= 50 and not alien_data == "No Data Available" and not blacklist_data == "Not Blacklisted" and not tags == 'None':
-                marker_color.append('red')
-                risk_color = 'red'
-                risk = 'High'
-            elif rep_score_color > 70 and rep_score_color <= 90 and not tags == 'None':
-                marker_color.append('red')
-                risk_color = 'red'
-                risk = 'High'
-            elif rep_score_color > 70 and rep_score_color <= 90 and not blacklist_data == "Not Blacklisted":
-                marker_color.append('red')
-                risk_color = 'red'
-                risk = 'High'
-            elif rep_score_color > 70 and rep_score_color <= 90 and not alien_data == "No Data Available":
-                marker_color.append('red')
-                risk_color = 'red'
-                risk = 'High'
-            elif rep_score_color > 70 and rep_score_color <= 90:
-                marker_color.append('orange')
-                risk_color = 'orange'
-                risk = 'Medium'
-            elif rep_score_color > 90:
-                marker_color.append('red')
-                risk_color = 'red'
-                risk = 'High'
-        else:
+        elif not customer == None:
+            customer = Client_IP_Check(i)
             marker_color.append('white')
             risk_color = 'black'
-            risk = 'Insufficient Data'
-            rep_score = 'No Data Available'
-
-        # Find if IP is a Tor Node
-        # tor_url = 'https://torstatus.blutmagie.de/tor_exit_query.php'
-        # tor_payload = {'QueryIP':i}
-        # session = requests.session()
-        # tor_request = requests.post(tor_url, data=tor_payload)
-        # if "The IP Address you entered matches" in tor_request.text:
-        #     tor = "Yes"
-        # elif "The IP Address you entered is NOT" in tor_request.text:
-        #     tor = "No"
-        # else:
-        #     print "[!] Error! Response not found, check code!"
+            risk = '%s\'s IP' % customer
+        else:
+            marker_color.append('green')
+            risk_color = 'green'
+            risk = 'Minimal'
 
         if output == "SingleIP":
             # Print out results
@@ -416,11 +389,13 @@ def analyzeIPs(ips, output):
             print '[*] Reputation Score:\t%s' % rep_score
             print '[*] Blacklist Status:\t%s' % blacklist_data
             print '[*] Alien Vault:\t%s' % alien_data
-            print '[*] Tags:\t\t%s' % tags
-            print '\n[+] Links:'
+            print '[*] Cymon.io Tags:\t%s' % tags
+            print '\n[+] Sources:'
             print '[*] IP Info URL:\t%s' % loc_url
             print '[*] Reputation URL:\t%s' % rep_url
+            print '[*] Blacklists:\t\t%s' % blacklist_reported
             print '[*] Alien Vault URL:\t%s' % alien_url
+            print '[*] Cymon.io URL:\t%s' % tags_url
             exit(0)
         else:
             # Move marker so they don't stack
@@ -451,7 +426,7 @@ def analyzeIPs(ips, output):
             # Create labels
             label.append("<h1>%s</h1><small>%s</small><hr><p>Risk Rating: <b style=color:%s>%s</b></p><p><a href='%s'>Reputation Score:</a> %s</p><p>Times Blacklisted:</a> %s</p><p><a href='%s'>Alien Vault:</a> %s</p><p>Tags: %s</p>" % (i,where,risk_color,risk,rep_url,rep_score,blacklist_count,alien_url,alien_data,tags))
 
-            writer.writerow([i,risk,rep_score,blacklist_data,alien_data,tags,country,region,city,hostname,isp,loc,rep_url,alien_url,loc_url])
+            writer.writerow([i,risk,rep_score,blacklist_data,alien_data,tags,country,region,city,hostname,isp,loc,rep_url,alien_url,tags_url,loc_url])
             count_analyzed += 1
             bar.next()
     bar.finish()
@@ -471,10 +446,24 @@ if __name__ == '__main__':
     c = ArgumentParser(description='%s: analyzes an IP or a list of IPs and determines risk associated with those IPs.' % PROGRAM, version=VERSION, epilog='Developed by ' + AUTHOR + ' as an open source tool.')
     c.add_argument('-i', help='input file', required=True)
     c.add_argument('-o', help='output CSV file', required=False)
+    c.add_argument('-c', help='Check to see if the IP is the client\'s IP address', required=False, action='store_true')
     c.add_argument('-m', help='Creates a map to view the information on it', required=False, action='store_true')
-    c.add_argument('--ip_column', help='coulmn in the CSV file with the IP addresses (starting with 0)', required=False)
+    c.add_argument('--ip_column', help='coulmn in the CSV file with the ips (starting with 0)', required=False)
 
     args = c.parse_args()
+
+    if args.c:
+        my_ip = load(urlopen('https://api.ipify.org/?format=json'))['ip']
+        ip_check = my_ip.rsplit('.',1)[0]
+        if ip_check == '209.43.126':
+            client_check = "Yes"
+        else:
+            print '[-] Error! You are not on Rook\'s network!'
+            print '[-] Please connect to VPN before running client check'
+            print 'Exiting program...'
+            exit(1)
+    else:
+        client_check = "No"
 
     if '.csv' in args.i or '.txt' in args.i:
         if not os.path.exists(args.i):
@@ -498,13 +487,13 @@ if __name__ == '__main__':
             ips = GetIPs(args.i, ip_column)
             start_time = datetime.datetime.now()
             if len(ips) > 1000:
-                print "[!] Will not be able to run all %s IPs in a day! Rate limit issues..." % len(ips)
+                print "[!] Will not be able to run all %s IPs in a 24hr period! Rate limit issues..." % len(ips)
                 cont = raw_input('[?] Continue? (Y/n) ')
                 if cont.lower() in ['n', 'no']:
                     print 'Exiting program...'
                     exit(1)
             print '[*] Analyzing %d IPs...' % len(ips)
-            results = analyzeIPs(ips, args.o)
+            results = analyzeIPs(ips, args.o, client_check)
             print '\n[+] Analysis complete. CSV output saved to: %s' % args.o
             if args.m:
                 print '\n[*] Creating map with location data...'
@@ -525,6 +514,6 @@ if __name__ == '__main__':
             print '[!] Warning! Will not save output for single IP!'
         try:
             ip = IPAddress(args.i)
-            analyzeIPs([args.i],"SingleIP")
+            analyzeIPs([args.i],"SingleIP", client_check)
         except ValueError as e:
             print '[!] Invalid input type! Please only input a single IP, CSV file, or Text File!'
