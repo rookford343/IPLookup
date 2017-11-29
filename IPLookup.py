@@ -5,13 +5,13 @@ import datetime
 import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
-# This import needs to be used to supress SSL alerts on newer versions of request
 # import urllib3
 # urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import csv
 import time
 import random
 import json
+from json import load
 import socket
 from urllib2 import urlopen
 from argparse import ArgumentParser
