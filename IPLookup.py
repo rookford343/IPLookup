@@ -453,7 +453,7 @@ if __name__ == '__main__':
     args = c.parse_args()
 
     if args.c:
-        my_ip = load(urlopen('https://api.ipify.org/?format=json'))['ip']
+        my_ip = load(urlopen('http://jsonip.com'))['ip']
         ip_check = my_ip.rsplit('.',1)[0]
         if ip_check == '209.43.126':
             client_check = "Yes"
