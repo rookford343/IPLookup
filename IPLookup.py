@@ -39,7 +39,7 @@ except ImportError as e:
     exit(1)
 
 PROGRAM = 'IPLookup'
-VERSION = '1.5'
+VERSION = '1.6'
 AUTHOR = 'Daniel Ford'
 lat = []
 lng = []
@@ -71,7 +71,7 @@ def GetIPs(file, c):
             for line in textfile:
                 try:
                     ips.append(line.strip())
-                except IndexError as e:
+                except Exception as e:
                     print '[-] Error parsing the IP from the following line:\n\t%s' % line
     return ips
 
@@ -106,8 +106,12 @@ def Client_IP_Check(ip):
         return None
 
 def analyzeIPs(ips, output, client_check):
-    count_analyzed = 0
     count_not_analyzed = 0
+    customer = None
+    high_risk = 0
+    medium_risk = 0
+    low_risk = 0
+    minimal_risk = 0
     global lat
     global lng
     global label
@@ -122,7 +126,7 @@ def analyzeIPs(ips, output, client_check):
             print '[*] Checking to see if client IP...'
             customer = Client_IP_Check(ips[0])
             if customer:
-                print '[!] IP address is %s\'s! DO NOT BLOCK!\n' % customer
+                print '[!] IP ADDRESS IS %s\'s! DO NOT BLOCK!\n' % customer
             else:
                 print '[*] IP address is not a client IP.\n'
         print '[*] Analyzing IP Address: %s' % ips[0]
@@ -136,7 +140,18 @@ def analyzeIPs(ips, output, client_check):
         # Get Location Info
         where = []
         loc_url = 'https://ipinfo.io/%s/' % i
-        info = requests.get(loc_url)
+        while True:
+            try:
+                info = requests.get(loc_url)
+                break
+            except requests.exceptions.HTTPError as errh:
+                print ("\nHTTP Error:",errh)
+            except requests.exceptions.ConnectionError as errc:
+                print ("\nError Connecting:",errc)
+            except requests.exceptions.Timeout:
+                print ("\nTimeout Error:",errt)
+            except requests.exceptions.RequestException as err:
+                print ("\nOops: Something went wrong",err)
         if info.status_code == 404:
             print "\n[!] %s is not a valid IP address!" % i
             print "[*] Moving to next IP..."
@@ -238,9 +253,13 @@ def analyzeIPs(ips, output, client_check):
                 print "[*] Waiting 10 seconds and trying again..."
             time.sleep(10)
         alien_data = alien.json()
-        if alien_data['activity_types']:
-            alien_data = alien_data['activity_types']
-            alien_data = str(alien_data).split('\'')[1]
+
+        try:
+            if alien_data['activity_types']:
+                alien_data = alien_data['activity_types']
+                alien_data = str(alien_data).split('\'')[1]
+        except:
+                print alien_data
         else:
             alien_data = "No Data Available"
 
@@ -295,6 +314,7 @@ def analyzeIPs(ips, output, client_check):
 
         # Associated tags from Cymon.io
         tags = []
+        tags_url = "https://cymon.io/%s" % i
         headers = {'Authorization':'Token %s' % Cymon_api_key}
         getTags = requests.get("https://cymon.io:443/api/nexus/v1/ip/%s/events/" % i, headers=headers)
         temp = 0
@@ -347,7 +367,8 @@ def analyzeIPs(ips, output, client_check):
         risk_color = ''
         risk_score = 0
         rep_score_temp = rep_score.split("/")[0]
-        rep_score_temp = int(rep_score_temp)
+        if rep_score_temp:
+            rep_score_temp = int(rep_score_temp)
         if rep_score_temp > 70:
             risk_score += 1
         if not alien_data == "No Data Available":
@@ -361,14 +382,17 @@ def analyzeIPs(ips, output, client_check):
                 marker_color.append('yellow')
                 risk_color = 'gold'
                 risk = 'Low'
+                low_risk += 1
             elif risk_score == 2:
                 marker_color.append('orange')
                 risk_color = 'orange'
                 risk = 'Medium'
+                medium_risk += 1
             elif risk_score >= 3:
                 marker_color.append('red')
                 risk_color = 'red'
                 risk = 'High'
+                high_risk += 1
         elif not customer == None:
             customer = Client_IP_Check(i)
             marker_color.append('white')
@@ -378,6 +402,7 @@ def analyzeIPs(ips, output, client_check):
             marker_color.append('green')
             risk_color = 'green'
             risk = 'Minimal'
+            minimal_risk += 1
 
         if output == "SingleIP":
             # Print out results
@@ -427,10 +452,9 @@ def analyzeIPs(ips, output, client_check):
             label.append("<h1>%s</h1><small>%s</small><hr><p>Risk Rating: <b style=color:%s>%s</b></p><p><a href='%s'>Reputation Score:</a> %s</p><p>Times Blacklisted:</a> %s</p><p><a href='%s'>Alien Vault:</a> %s</p><p>Tags: %s</p>" % (i,where,risk_color,risk,rep_url,rep_score,blacklist_count,alien_url,alien_data,tags))
 
             writer.writerow([i,risk,rep_score,blacklist_data,alien_data,tags,country,region,city,hostname,isp,loc,rep_url,alien_url,tags_url,loc_url])
-            count_analyzed += 1
             bar.next()
     bar.finish()
-    return [len(ips),count_analyzed, count_not_analyzed]
+    return [len(ips),count_not_analyzed, high_risk, medium_risk, low_risk, minimal_risk]
 
 def createMap(lat, lng, map_loc):
     gmap = gmplot.GoogleMapPlotter(21.9452245, -1.0986107, 3)
@@ -503,9 +527,12 @@ if __name__ == '__main__':
             end_time = datetime.datetime.now()
             run_time = end_time - start_time
             print '\n[*] IPs provided:\t%d' % results[0]
-            print '[*] IPs analyzed:\t%d' % results[1]
-            print '[*] IPs NOT analyzed:\t%d' % results[2]
-            print '[*] Total runtime:\t%s' % str(run_time)[:-5]
+            print '[*] IPs NOT analyzed:\t%d' % results[1]
+            print '\n[*] High Risk IPs:\t%d' % results[2]
+            print '[*] Medium Risk IPs:\t%d' % results[3]
+            print '[*] Low Risk IPs:\t%d' % results[4]
+            print '[*] Minimal Risk IPs:\t%d' % results[5]
+            print '\n[*] Total runtime:\t%s' % str(run_time)[:-5]
         else:
             print '[!] Error! Need to supply an output CSV file!'
             exit(1)
