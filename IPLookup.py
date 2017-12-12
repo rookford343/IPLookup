@@ -258,10 +258,10 @@ def analyzeIPs(ips, output, client_check):
             if alien_data['activity_types']:
                 alien_data = alien_data['activity_types']
                 alien_data = str(alien_data).split('\'')[1]
+            else:
+                alien_data = "No Data Available"
         except:
                 print alien_data
-        else:
-            alien_data = "No Data Available"
 
         # Determine how many times it has been blacklisted
         bls = ["0spam.fusionzero.com","access.redhawk.org","all.rbl.jp",
