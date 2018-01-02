@@ -1,3 +1,4 @@
+[![python](https://img.shields.io/badge/python-2.7-brightgreen.svg)](https://www.python.org/downloads/release/python-2714/) ![Os](https://img.shields.io/badge/Platform-Linux%20%7C%20OSX-orange.svg)
 # IPLookup
 
 IPLookup is a network security tool that allows a user to take a list of IP addresses from a Firewall, IDS, Logs, etc. and determine if there is a risk associated with letting that IP address into your network.
