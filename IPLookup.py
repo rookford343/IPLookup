@@ -49,8 +49,6 @@ rate_limit = False
 
 # Have to sign up for an account on Cymon.io to get API key
 Cymon_api_key = '' # Only get a 1000 requests per day
-# Rook's Grunt API key (This your API key located in Preforce >> Help >> Token)
-rook_api = ''
 
 def GetIPs(file, c):
     ips = []
@@ -75,39 +73,8 @@ def GetIPs(file, c):
                     print '[-] Error parsing the IP from the following line:\n\t%s' % line
     return ips
 
-def Client_IP_Check(ip):
-    url = "https://preforce.rook.net/api/is_client"
-
-    querystring = {"ip_address":ip}
-
-    headers = {
-        'authorization': "Token %s" % rook_api,
-        'cache-control': "no-cache"
-    }
-    response = requests.request("GET", url, headers=headers, verify=False, params=querystring)
-
-    ip_data = None
-    try:
-        ip_data = json.loads(response.text)
-    except Exception, e:
-        error = {
-            "e": str(e),
-            "url": url,
-            "response": str(response),
-            "response.text": str(response.text)
-        }
-        print error
-
-    if not ip_data['is_client'] == "False":
-        ip_data = ip_data['is_client']
-        ip_data = ip_data[ip_data.find(':')+2:ip_data.rfind('-')-1]
-        return ip_data
-    else:
-        return None
-
-def analyzeIPs(ips, output, client_check):
+def analyzeIPs(ips, output):
     count_not_analyzed = 0
-    customer = None
     high_risk = 0
     medium_risk = 0
     low_risk = 0
@@ -122,13 +89,6 @@ def analyzeIPs(ips, output, client_check):
     if Bar and not output == 'SingleIP':
         bar = Bar('Analyzing', max=len(ips), suffix='%(index)d/%(max)d - Elapsed: %(elapsed_td)s - Remaining: %(eta_td)s')
     elif output == 'SingleIP':
-        if client_check == "Yes":
-            print '[*] Checking to see if client IP...'
-            customer = Client_IP_Check(ips[0])
-            if customer:
-                print '[!] IP ADDRESS IS %s\'s! DO NOT BLOCK!\n' % customer
-            else:
-                print '[*] IP address is not a client IP.\n'
         print '[*] Analyzing IP Address: %s' % ips[0]
     if len(ips) > 1:
         csvfile = open(output, 'wb')
@@ -377,7 +337,7 @@ def analyzeIPs(ips, output, client_check):
             risk_score += 1
         if not tags == 'None':
             risk_score += 1
-        if risk_score > 0 and customer == None:
+        if risk_score > 0:
             if risk_score == 1:
                 marker_color.append('yellow')
                 risk_color = 'gold'
@@ -393,11 +353,6 @@ def analyzeIPs(ips, output, client_check):
                 risk_color = 'red'
                 risk = 'High'
                 high_risk += 1
-        elif not customer == None:
-            customer = Client_IP_Check(i)
-            marker_color.append('white')
-            risk_color = 'black'
-            risk = '%s\'s IP' % customer
         else:
             marker_color.append('green')
             risk_color = 'green'
@@ -470,24 +425,10 @@ if __name__ == '__main__':
     c = ArgumentParser(description='%s: analyzes an IP or a list of IPs and determines risk associated with those IPs.' % PROGRAM, version=VERSION, epilog='Developed by ' + AUTHOR + ' as an open source tool.')
     c.add_argument('-i', help='input file', required=True)
     c.add_argument('-o', help='output CSV file', required=False)
-    c.add_argument('-c', help='Check to see if the IP is the client\'s IP address', required=False, action='store_true')
     c.add_argument('-m', help='Creates a map to view the information on it', required=False, action='store_true')
     c.add_argument('--ip_column', help='coulmn in the CSV file with the ips (starting with 0)', required=False)
 
     args = c.parse_args()
-
-    if args.c:
-        my_ip = load(urlopen('http://jsonip.com'))['ip']
-        ip_check = my_ip.rsplit('.',1)[0]
-        if ip_check == '209.43.126':
-            client_check = "Yes"
-        else:
-            print '[-] Error! You are not on Rook\'s network!'
-            print '[-] Please connect to VPN before running client check'
-            print 'Exiting program...'
-            exit(1)
-    else:
-        client_check = "No"
 
     if '.csv' in args.i or '.txt' in args.i:
         if not os.path.exists(args.i):
@@ -517,7 +458,7 @@ if __name__ == '__main__':
                     print 'Exiting program...'
                     exit(1)
             print '[*] Analyzing %d IPs...' % len(ips)
-            results = analyzeIPs(ips, args.o, client_check)
+            results = analyzeIPs(ips, args.o)
             print '\n[+] Analysis complete. CSV output saved to: %s' % args.o
             if args.m:
                 print '\n[*] Creating map with location data...'
@@ -541,6 +482,6 @@ if __name__ == '__main__':
             print '[!] Warning! Will not save output for single IP!'
         try:
             ip = IPAddress(args.i)
-            analyzeIPs([args.i],"SingleIP", client_check)
+            analyzeIPs([args.i],"SingleIP")
         except ValueError as e:
             print '[!] Invalid input type! Please only input a single IP, CSV file, or Text File!'
