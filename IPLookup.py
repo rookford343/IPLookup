@@ -187,10 +187,8 @@ def analyzeIPs(ips, output):
                     time.sleep(10)
                 else:
                     print "[!] Reputation Authority is still down!"
-                    cont = raw_input('[?] Do you want to keep waiting? (Y/n) ')
-                    if cont.lower() in ['n', 'no']:
-                        print 'Exiting program...'
-                        exit(0)
+                    print "[*] Waiting another 120 seconds and trying again..."
+                    time.sleep(120)
         rep = rep.text.split("\n")
         for line in rep:
             if 'Reputation Score' in line:
